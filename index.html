@@ -228,7 +228,7 @@ else if(a==='sort'){V.sort=b.dataset.s;render()}
 else if(a==='del'){if(V.cf){var s2=sec(V.id);s2.words.forEach(function(w){Object.keys(S.stats).forEach(function(k){if(k.indexOf(w.id)===0)delete S.stats[k]})});S.sections=S.sections.filter(function(x){return x.id!==V.id});if(!S.sections.length)S.sections.push({id:'s1',name:'1–100',words:[]});save();go('home')}else{V.cf=1;render()}}
 else if(a==='backup')go('backup');
 else if(a==='syncnow'){CL.msg='同期中…';clShow();pull()}
-else if(a==='ghsave'){var tk=document.getElementById('tk'),v=tk?tk.value.trim():'';if(v){ghSet({tok:v});tk.value='';CL.st='on';CL.msg='同期中…';clShow();pull()}}
+else if(a==='ghsave'){var tk=document.getElementById('tk'),v=tk?tk.value.replace(/[^A-Za-z0-9_]/g,''):'';if(v){ghSet({tok:v});tk.value='';CL.st='on';CL.msg='同期中…';clShow();pull()}}
 else if(a==='ghoff'){ghSet({});CL.st='off';CL.msg='';clShow()}
 else if(a==='export'){document.getElementById('bk').value=JSON.stringify(S)}
 else if(a==='import'){var m=document.getElementById('msg');try{var d=JSON.parse(document.getElementById('bk').value);if(!d||!d.sections||!d.stats)throw 0;S=d;save();m.textContent='復元しました'}catch(x){m.textContent='読み込めませんでした。バックアップ文字列をそのまま貼り付けてください。'}}
@@ -237,11 +237,12 @@ else if(a==='import'){var m=document.getElementById('msg');try{var d=JSON.parse(
 var GK='kinphrase_gh_v1',CL={t:null,st:'off',msg:'',busy:0,files:[]};
 function ghGet(){try{return JSON.parse(localStorage.getItem(GK)||'{}')}catch(e){return {}}}
 function ghSet(o){try{localStorage.setItem(GK,JSON.stringify(o))}catch(e){}}
-function clText(){var g=ghGet();if(!g.tok)return '☁ 同期は未設定です。下の手順でGitHubのトークンを設定すると、オンラインのとき自動で同期します（オフラインのときは端末内に保存し、つながった時点で同期します）。';if(CL.st==='err')return '☁ 同期できませんでした。'+(CL.msg||'')+'<br>ネットの接続やトークンを確認し、「今すぐ同期する」を押してください。';return '☁ GitHub Gistで同期中'+(CL.msg?'<br>'+CL.msg:'')}
+function tkInfo(){var t=ghGet().tok||'';return t?'入力済みトークン: 先頭'+t.slice(0,4)+'・末尾'+t.slice(-2)+'・'+t.length+'文字（正しい長さは40文字）':'トークンなし'}
+function clText(){var g=ghGet();if(!g.tok)return '☁ 同期は未設定です。下の手順でGitHubのトークンを設定すると、オンラインのとき自動で同期します（オフラインのときは端末内に保存し、つながった時点で同期します）。';if(CL.st==='err')return '☁ 同期できませんでした。'+(CL.msg||'')+'<br>'+tkInfo()+'<br>ネットの接続やトークンを確認し、「今すぐ同期する」を押してください。';return '☁ GitHub Gistで同期中'+(CL.msg?'<br>'+CL.msg:'')}
 function clShow(){var e=document.getElementById('cl');if(e)e.innerHTML=clText()}
 function stMerge(a,b){var o={},ch=0,k;for(k in a)o[k]=a[k];for(k in b){var x=o[k],y=b[k];if(!x||(y&&(y.seen||0)>(x.seen||0))){o[k]=y;ch=1}}return {m:o,ch:ch}}
 function tm(){var d=new Date();return d.getHours()+':'+('0'+d.getMinutes()).slice(-2)}
-function gh(path,opt){opt=opt||{};opt.headers={'Authorization':'Bearer '+ghGet().tok,'Accept':'application/vnd.github+json','Content-Type':'application/json'};return fetch('https://api.github.com'+path,opt).then(function(r){if(!r.ok){var e=new Error('HTTP '+r.status);e.status=r.status;throw e}return r.json()})}
+function gh(path,opt){opt=opt||{};opt.headers={'Authorization':'Bearer '+ghGet().tok,'Accept':'application/vnd.github+json','Content-Type':'application/json'};return fetch('https://api.github.com'+path,opt).then(function(r){if(!r.ok){return r.text().then(function(t){var m='';try{m=(JSON.parse(t)||{}).message||''}catch(x){}var e=new Error('HTTP '+r.status+(m?' '+m:''));e.status=r.status;throw e})}return r.json()})}
 async function ghFind(){var g=ghGet();if(g.gid)return g.gid;for(var p=1;p<=5;p++){var l=await gh('/gists?per_page=100&page='+p);for(var i=0;i<l.length;i++){if(l[i].description==='kinphrase-progress'){g.gid=l[i].id;ghSet(g);return g.gid}}if(l.length<100)break}return null}
 function syncSoon(){if(!ghGet().tok)return;clearTimeout(CL.t);CL.t=setTimeout(function(){pull()},4000)}
 async function push(){var g=ghGet(),ks=Object.keys(S.stats),n=700,cnt=0,f={};for(var i=0;i<ks.length;i+=n){var c={};ks.slice(i,i+n).forEach(function(k){c[k]=S.stats[k]});f['kp'+cnt+'.json']={content:JSON.stringify({s:c})};cnt++}
@@ -256,7 +257,7 @@ if(gid){try{var gs=await gh('/gists/'+gid);CL.files=[];for(var nm in gs.files){i
 var mg=stMerge(S.stats,r);S.stats=mg.m;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
 await push();CL.st='on';CL.msg='最終同期 '+tm();
 if(mg.ch&&['home','sec','mis','backup','words'].indexOf(V.name)>=0)render()}
-catch(e){CL.st='err';CL.msg=(e.status===401||e.status===403)?'トークンが無効か、権限(gist)が足りません。':(e.status?'エラー: '+e.message:'')}
+catch(e){CL.st='err';CL.msg=(e.status===401?'トークンが無効です（'+e.message+'）。':e.status===403?'GitHubに拒否されました（'+e.message+'）。':(e.status?'エラー: '+e.message:'通信できませんでした（'+(e.message||'')+'）。'))}
 CL.busy=0;clShow()}
 window.addEventListener('online',function(){pull()});
 document.addEventListener('visibilitychange',function(){if(!document.hidden)pull()});
