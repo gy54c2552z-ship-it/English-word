@@ -3,14 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f4e5f"><link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-180.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <title>金のフレーズ 単語カード</title>
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-180.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="金のフレーズ">
-<meta name="theme-color" content="#0f766e">
-
 <style>
 :root{--bg:#f6f3ec;--sf:#fffdf8;--tx:#1d2a33;--mu:#6b7780;--ln:#ddd6c6;--ac:#1f4e5f;--ac2:#fff;--ok:#2d7a4f;--ng:#b5432f;--gd:#b8892b;--t1:#cfe9e6;--t2:#8fcfc8;--t3:#2a9d94;--t4:#e3b53f;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -70,6 +64,9 @@ button:disabled{opacity:.4;cursor:default}
 </head>
 <body>
 <div id="app"></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 var KEY='kinphrase_v1',LIMIT=5000,TH=0.75;
 var MODES={w:'単語',e:'例文',dp:'派生語①　動・名・形・副・前・接',dr:'派生語②　類・同・反・関・例・略・複',all:'すべてまとめて'};
@@ -191,7 +188,7 @@ if(!L.length)h+='<div class="sub">単語がありません</div>';
 L.forEach(function(w){var t=st(w.id),k=status(w.id);
 h+='<div class="wl"><div class="row sp"><span><b>'+esc(w.en)+'</b><span class="tag">'+(k==='done'?'習得済み':k==='rev'?'要復習':'未学習')+'</span></span><span class="sub">'+(t.seen?pct(t.ok,t.seen)+'%':'―')+'</span></div><div class="sub">'+esc(w.ja)+(t.seen?'　／　'+t.ok+'/'+t.seen+'回'+(t.to?'　時間切れ '+t.to:''):'')+'</div></div>'});
 return h+'</div>'};
-R.backup=function(){return '<button class="link" data-a="home">‹ ホーム</button><h2>データの保存・復元</h2><div id="cl" class="sub">'+clText()+'</div><div class="sub"><b>同期の設定（初回のみ・端末ごと）</b><br>① <a href="https://github.com/settings/tokens/new?scopes=gist&description=kinphrase" target="_blank" rel="noopener">このリンク</a>を開く（GitHubにログイン）→ Expiration を「No expiration」にして、一番下の「Generate token」を押す。<br>② 表示された ghp_ で始まる文字列をコピーし、下に貼り付けて保存。<br>※ 権限は gist だけ。他端末でも同じ手順で、同じ進捗が自動で共有されます。</div><input id="tk" type="password" autocomplete="off" placeholder="ghp_…（GitHubトークン）" style="width:100%;box-sizing:border-box;padding:10px;font-size:16px;margin:6px 0;border:1px solid #8886;border-radius:8px;background:transparent;color:inherit"><button class="pri full" data-a="ghsave">トークンを保存して同期</button><button class="full" data-a="syncnow">今すぐ同期する</button><button class="full" data-a="ghoff">この端末の同期をやめる（トークン削除）</button><div class="sub">進捗はこの端末のブラウザに自動保存されます。端末を変える時や念のためのバックアップには、下の文字列をコピーしてメモなどに保存し、復元時に貼り付けてください。</div><button class="full" data-a="export">バックアップ文字列を表示</button><textarea id="bk" placeholder="ここに表示／貼り付け"></textarea><button class="pri full" data-a="import">貼り付けた内容で復元（現在のデータは置き換わります）</button><div id="msg" class="sub"></div>'};
+R.backup=function(){return '<button class="link" data-a="home">‹ ホーム</button><h2>データの保存・復元</h2><div id="cl">'+auHtml()+'</div><div class="sub">進捗はこの端末のブラウザに自動保存されます。端末を変える時や念のためのバックアップには、下の文字列をコピーしてメモなどに保存し、復元時に貼り付けてください。</div><button class="full" data-a="export">バックアップ文字列を表示</button><textarea id="bk" placeholder="ここに表示／貼り付け"></textarea><button class="pri full" data-a="import">貼り付けた内容で復元（現在のデータは置き換わります）</button><div id="msg" class="sub"></div>'};
 
 function startTimer(){clearInterval(T.iv);var t0=performance.now();V.t0=t0;if(V.q[V.i].kind==='e')return;var b=document.getElementById('tb');
 T.iv=setInterval(function(){var e=performance.now()-t0;if(b)b.style.width=Math.max(0,100-e/LIMIT*100)+'%';if(e>=LIMIT){clearInterval(T.iv);answer(false,true,LIMIT)}},40)}
@@ -227,43 +224,38 @@ else if(a==='words')go('words',{id:V.id,sort:'weak'});
 else if(a==='sort'){V.sort=b.dataset.s;render()}
 else if(a==='del'){if(V.cf){var s2=sec(V.id);s2.words.forEach(function(w){Object.keys(S.stats).forEach(function(k){if(k.indexOf(w.id)===0)delete S.stats[k]})});S.sections=S.sections.filter(function(x){return x.id!==V.id});if(!S.sections.length)S.sections.push({id:'s1',name:'1–100',words:[]});save();go('home')}else{V.cf=1;render()}}
 else if(a==='backup')go('backup');
-else if(a==='syncnow'){CL.msg='同期中…';clShow();pull()}
-else if(a==='ghsave'){var tk=document.getElementById('tk'),v=tk?tk.value.replace(/[^A-Za-z0-9_]/g,''):'';if(v){ghSet({tok:v});tk.value='';CL.st='on';CL.msg='同期中…';clShow();pull()}}
-else if(a==='ghoff'){ghSet({});CL.st='off';CL.msg='';clShow()}
+else if(a==='syncnow'){if(CL.col){CL.msg='同期中…';clShow();pull(true)}}
+else if(a==='login'||a==='signup'||a==='reset'){auAct(a)}
+else if(a==='logout'){if(AUTH)AUTH.signOut()}
 else if(a==='export'){document.getElementById('bk').value=JSON.stringify(S)}
 else if(a==='import'){var m=document.getElementById('msg');try{var d=JSON.parse(document.getElementById('bk').value);if(!d||!d.sections||!d.stats)throw 0;S=d;save();m.textContent='復元しました'}catch(x){m.textContent='読み込めませんでした。バックアップ文字列をそのまま貼り付けてください。'}}
 });
 
-var GK='kinphrase_gh_v1',CL={t:null,st:'off',msg:'',busy:0,files:[]};
-function ghGet(){try{return JSON.parse(localStorage.getItem(GK)||'{}')}catch(e){return {}}}
-function ghSet(o){try{localStorage.setItem(GK,JSON.stringify(o))}catch(e){}}
-function tkInfo(){var t=ghGet().tok||'';return t?'入力済みトークン: 先頭'+t.slice(0,4)+'・末尾'+t.slice(-2)+'・'+t.length+'文字（正しい長さは40文字）':'トークンなし'}
-function clText(){var g=ghGet();if(!g.tok)return '☁ 同期は未設定です。下の手順でGitHubのトークンを設定すると、オンラインのとき自動で同期します（オフラインのときは端末内に保存し、つながった時点で同期します）。';if(CL.st==='err')return '☁ 同期できませんでした。'+(CL.msg||'')+'<br>'+tkInfo()+'<br>ネットの接続やトークンを確認し、「今すぐ同期する」を押してください。';return '☁ GitHub Gistで同期中'+(CL.msg?'<br>'+CL.msg:'')}
-function clShow(){var e=document.getElementById('cl');if(e)e.innerHTML=clText()}
+var FBCFG={apiKey:"AIzaSyDrwb9ZNKdd0Mt0UQgSNxWf_67G1A1RTvg",authDomain:"english-word-5aed6.firebaseapp.com",projectId:"english-word-5aed6",storageBucket:"english-word-5aed6.firebasestorage.app",messagingSenderId:"1082185498383",appId:"1:1082185498383:web:55a3ebc624210d78c8c87a"};
+var CL={col:null,t:null,st:'off',msg:'',user:null,busy:0},AUTH=null;
+var IS='width:100%;font:inherit;font-size:16px;color:var(--tx);background:var(--sf);border:1px solid var(--ln);border-radius:10px;padding:10px;margin:4px 0';
+function auHtml(){
+if(typeof firebase==='undefined')return '<div class="sub">☁ ログイン機能を読み込めませんでした。ネットにつながった状態で、一度開き直してください。学習記録はこの端末に保存されています。</div>';
+if(CL.user)return '<div class="sub">☁ ログイン中：'+esc(CL.user)+'<br>学習記録を自動でクラウドに保存します。'+(CL.msg?'<br>'+CL.msg:'')+'</div><button class="full" data-a="syncnow">今すぐ同期する</button><button class="full" data-a="logout">ログアウト</button>';
+return '<div class="sub">☁ メールアドレスとパスワードでログインすると、どの端末でも学習記録が同期されます（初めての方は「新規登録」）。</div><input type="email" id="aem" placeholder="メールアドレス" autocomplete="username" autocapitalize="off" style="'+IS+'"><input type="password" id="apw" placeholder="パスワード（6文字以上）" autocomplete="current-password" style="'+IS+'"><button class="pri full" data-a="login">ログイン</button><button class="full" data-a="signup">新規登録</button><button class="full" data-a="reset">パスワードを忘れた</button><div id="aum" class="sub">'+(CL.msg||'')+'</div>'}
+function auShow(){var e=document.getElementById('cl');if(e)e.innerHTML=auHtml()}
+function clShow(){var e=document.getElementById('cl');if(!e)return;if(!CL.user&&document.getElementById('aem')){var m=document.getElementById('aum');if(m)m.innerHTML=CL.msg||'';return}e.innerHTML=auHtml()}
+function auErr(e){var c=(e&&e.code)||'',m={'auth/invalid-email':'メールアドレスの形式が正しくありません。','auth/missing-email':'メールアドレスを入力してください。','auth/missing-password':'パスワードを入力してください。','auth/weak-password':'パスワードは6文字以上にしてください。','auth/email-already-in-use':'このメールアドレスは登録済みです。「ログイン」を押してください。','auth/invalid-credential':'メールアドレスまたはパスワードが違います。','auth/wrong-password':'メールアドレスまたはパスワードが違います。','auth/user-not-found':'メールアドレスまたはパスワードが違います。','auth/network-request-failed':'通信できませんでした。ネット接続を確認してください。','auth/too-many-requests':'試行回数が多すぎます。しばらく待ってからやり直してください。','auth/operation-not-allowed':'この方法のログインが有効になっていません。'};CL.msg=(m[c]||'エラーが出ました。')+(c?'（'+c+'）':'');clShow()}
+function auAct(a){if(!AUTH)return;var em=(document.getElementById('aem').value||'').trim(),pw=document.getElementById('apw').value||'';CL.msg='通信中…';clShow();
+if(a==='login')AUTH.signInWithEmailAndPassword(em,pw).catch(auErr);
+else if(a==='signup')AUTH.createUserWithEmailAndPassword(em,pw).catch(auErr);
+else AUTH.sendPasswordResetEmail(em).then(function(){CL.msg='再設定メールを送りました。届かないときは迷惑メールフォルダも確認してください。';clShow()}).catch(auErr)}
 function stMerge(a,b){var o={},ch=0,k;for(k in a)o[k]=a[k];for(k in b){var x=o[k],y=b[k];if(!x||(y&&(y.seen||0)>(x.seen||0))){o[k]=y;ch=1}}return {m:o,ch:ch}}
+function tout(p,ms){return Promise.race([p,new Promise(function(_,rj){setTimeout(function(){rj(new Error('timeout'))},ms)})])}
+function syncSoon(){if(!CL.col)return;clearTimeout(CL.t);CL.t=setTimeout(push,4000)}
 function tm(){var d=new Date();return d.getHours()+':'+('0'+d.getMinutes()).slice(-2)}
-function gh(path,opt){opt=opt||{};opt.headers={'Authorization':'Bearer '+ghGet().tok,'Accept':'application/vnd.github+json','Content-Type':'application/json'};return fetch('https://api.github.com'+path,opt).then(function(r){if(!r.ok){return r.text().then(function(t){var m='';try{m=(JSON.parse(t)||{}).message||''}catch(x){}var e=new Error('HTTP '+r.status+(m?' '+m:''));e.status=r.status;throw e})}return r.json()})}
-async function ghFind(){var g=ghGet();if(g.gid)return g.gid;for(var p=1;p<=5;p++){var l=await gh('/gists?per_page=100&page='+p);for(var i=0;i<l.length;i++){if(l[i].description==='kinphrase-progress'){g.gid=l[i].id;ghSet(g);return g.gid}}if(l.length<100)break}return null}
-function syncSoon(){if(!ghGet().tok)return;clearTimeout(CL.t);CL.t=setTimeout(function(){pull()},4000)}
-async function push(){var g=ghGet(),ks=Object.keys(S.stats),n=700,cnt=0,f={};for(var i=0;i<ks.length;i+=n){var c={};ks.slice(i,i+n).forEach(function(k){c[k]=S.stats[k]});f['kp'+cnt+'.json']={content:JSON.stringify({s:c})};cnt++}
-if(!cnt)f['kp0.json']={content:'{"s":{}}'};
-CL.files.forEach(function(nm){if(!f[nm]&&/^kp\d+\.json$/.test(nm))f[nm]=null});
-if(g.gid){await gh('/gists/'+g.gid,{method:'PATCH',body:JSON.stringify({files:f})})}
-else{var r=await gh('/gists',{method:'POST',body:JSON.stringify({description:'kinphrase-progress',public:false,files:f})});g.gid=r.id;ghSet(g)}
-CL.files=Object.keys(f).filter(function(k){return f[k]})}
-async function pull(){var g=ghGet();if(!g.tok||CL.busy)return;if(navigator.onLine===false){return}CL.busy=1;
-try{var gid=await ghFind(),r={};
-if(gid){try{var gs=await gh('/gists/'+gid);CL.files=[];for(var nm in gs.files){if(/^kp\d+\.json$/.test(nm)){CL.files.push(nm);var fc=gs.files[nm];if(fc.truncated&&fc.raw_url){var tx=await (await fetch(fc.raw_url)).text();fc={content:tx}}var d=(JSON.parse(fc.content||'{}')||{}).s||{};for(var k in d)r[k]=d[k]}}}catch(e){if(e.status===404){var g2=ghGet();delete g2.gid;ghSet(g2)}else throw e}}
+async function push(){if(!CL.col)return;if(navigator.onLine===false){CL.msg='オフラインです。つながったら自動で同期します。';clShow();return}try{var ks=Object.keys(S.stats),n=700,cnt=0;for(var i=0;i<ks.length;i+=n){var c={};ks.slice(i,i+n).forEach(function(k){c[k]=S.stats[k]});await tout(CL.col.doc('p'+cnt).set({s:c}),15000);cnt++}await tout(CL.col.doc('meta').set({n:cnt,t:Date.now()}),15000);CL.st='on';CL.msg='最終同期 '+tm()}catch(e){CL.st='err';CL.msg='同期できませんでした。しばらくしてから「今すぐ同期する」を押してください。'}clShow()}
+async function pull(manual){if(!CL.col)return;if(navigator.onLine===false){CL.msg='オフラインです。つながったら自動で同期します。';clShow();return}try{var m=await tout(CL.col.doc('meta').get(),15000),r={};if(m.exists){var cnt=(m.data()||{}).n||0;for(var i=0;i<cnt;i++){var s=await tout(CL.col.doc('p'+i).get(),15000);if(s.exists){var d=(s.data()||{}).s||{};for(var k in d)r[k]=d[k]}}}
 var mg=stMerge(S.stats,r);S.stats=mg.m;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
-await push();CL.st='on';CL.msg='最終同期 '+tm();
-if(mg.ch&&['home','sec','mis','backup','words'].indexOf(V.name)>=0)render()}
-catch(e){CL.st='err';CL.msg=(e.status===401?'トークンが無効です（'+e.message+'）。':e.status===403?'GitHubに拒否されました（'+e.message+'）。':(e.status?'エラー: '+e.message:'通信できませんでした（'+(e.message||'')+'）。'))}
-CL.busy=0;clShow()}
-window.addEventListener('online',function(){pull()});
-document.addEventListener('visibilitychange',function(){if(!document.hidden)pull()});
-if(ghGet().tok)pull();
+await push();if(mg.ch&&['home','sec','mis','backup','words'].indexOf(V.name)>=0)render()}catch(e){CL.st='err';CL.msg='同期できませんでした（オフラインかもしれません）。';clShow()}}
+(function(){if(typeof firebase==='undefined')return;try{firebase.initializeApp(FBCFG);AUTH=firebase.auth();var db=firebase.firestore();AUTH.onAuthStateChanged(function(u){if(u){CL.user=u.email||'ログイン中';CL.col=db.collection('users/'+u.uid+'/progress');CL.st='on';CL.msg='同期中…';auShow();pull()}else{CL.user=null;CL.col=null;CL.st='off';CL.msg='';auShow()}});window.addEventListener('online',function(){if(CL.col)pull()});document.addEventListener('visibilitychange',function(){if(!document.hidden&&CL.col)pull()})}catch(e){CL.st='err'}})();
 render();
 </script>
-<script>if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}</script>
+<script>if('serviceWorker' in navigator&&/^https?:/.test(location.protocol)){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}</script>
 </body>
 </html>
